@@ -3,13 +3,15 @@
 
 #include "hittable.h"
 #include "rtweekend.h"
+#include "material.h"
 
 class camera
 {
     public:
         double aspect_ratio = 1.0;
-        int image_width = 1920;
+        int image_width = 100;
         int samples_per_pixel = 10;
+        int max_depth = 10;
 
         void render(const hittable& world)
         {
@@ -25,8 +27,8 @@ class camera
                     colour pixel_colour(0, 0, 0);
                     for (int sample = 0; sample < samples_per_pixel; sample++)
                     {
-                        ray ray_obj = get_ray(pixel_x, pixel_y);
-                        pixel_colour += ray_colour(ray_obj, world);
+                        ray ray_obj = get_ray(pixel_y, pixel_x);
+                        pixel_colour += ray_colour(ray_obj, max_depth, world);
                     }
                     write_colour(image_file, pixel_samples_scale * pixel_colour);
                 }
@@ -78,15 +80,15 @@ class camera
             pixel00_location = viewport_upper_left + 0.5 * (pixel_delta_x + pixel_delta_y);
         }
 
-        ray get_ray(int pixel_x, int pixel_y) const
+        ray get_ray(int pixel_y, int pixel_x) const
         {
             // Construct a camera ray originating from the origin and directed 
             // at a randomly sampled point around the pixel location x, y
 
-            auto offset = camera_center;
+            auto offset = sample_square();
             auto pixel_sample = pixel00_location
-                              + ((pixel_x + offset.get_x()) * pixel_delta_x)
-                              + ((pixel_y + offset.get_y()) * pixel_delta_y);
+                              + ((pixel_y + offset.get_x()) * pixel_delta_y)
+                              + ((pixel_x + offset.get_y()) * pixel_delta_x);
 
             auto ray_origin = camera_center;
             auto ray_direction = pixel_sample - ray_origin;
@@ -100,13 +102,26 @@ class camera
             return vec3(random_double() - 0.5, random_double() - 0.5, 0);
         }
         
-        colour ray_colour(const ray& ray_obj, const hittable& world)
+        colour ray_colour(const ray& ray_obj, int depth, const hittable& world) const
         {
-            hit_record record;
-            if (world.hit(ray_obj, interval(0, infinity), record))
+            // If we've exceeded the ray bounce limit, no more light is gathered
+            if (depth <= 0)
             {
-                vec3 direction = random_on_hemisphere(record.surface_normal);
-                return 0.5 * ray_colour(ray(record.intersection_point, direction), world);
+                return colour(0, 0, 0);
+            }
+            
+            hit_record record;
+            
+            if (world.hit(ray_obj, interval(0.001, infinity), record))
+            {
+                ray scattered;
+                colour attenuation;
+                if (record.mat -> scatter(ray_obj, record, attenuation, scattered))
+                {
+                    return attenuation * ray_colour(scattered, depth - 1, world);
+                }
+
+                return colour(0, 0, 0);
             }
             
             vec3 unit_direction = unit_vector(ray_obj.get_direction());

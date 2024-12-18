@@ -50,6 +50,15 @@ class vec3
             return components[0]*components[0] + components[1]*components[1] + components[2]*components[2];
         }
 
+        bool near_zero() const
+        {
+            // Return true if the vector is close to zero in all dimensions
+            auto threshold = 1e-8;
+            return (std::fabs(components[0]) < threshold) 
+                && (std::fabs(components[1]) < threshold)
+                && (std::fabs(components[2]) < threshold);
+        }
+
         static vec3 get_random()
         {
             return vec3(random_double(), random_double(), random_double());
@@ -163,6 +172,11 @@ inline vec3 random_on_hemisphere(const vec3& normal)
     {
         return -on_unit_sphere;
     }
+}
+
+inline vec3 reflect(const vec3& vector, const vec3& normal)
+{
+    return vector - 2 * dot(vector, normal) * normal;
 }
 
 #endif

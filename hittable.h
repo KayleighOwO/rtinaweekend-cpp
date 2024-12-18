@@ -3,11 +3,14 @@
 
 #include "rtweekend.h"
 
+class material;
+
 class hit_record
 {
     public:
         point3 intersection_point;
         vec3 surface_normal;
+        shared_ptr<material> mat;
         double t;
         bool front_face;
 

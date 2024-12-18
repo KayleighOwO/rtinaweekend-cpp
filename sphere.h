@@ -7,8 +7,8 @@
 class sphere : public hittable
 {
     public:
-        sphere(const point3& sphere_center, double sphere_radius)
-             : center(sphere_center), radius(std::fmax(0, sphere_radius)) {}
+        sphere(const point3& sphere_center, double sphere_radius, shared_ptr<material> mat)
+             : center(sphere_center), radius(std::fmax(0, sphere_radius)), mat(mat) {}
 
         bool hit(const ray& ray_obj,
                  interval ray_interval,
@@ -46,6 +46,7 @@ class sphere : public hittable
             record.intersection_point = ray_obj.get_point_at(record.t);
             vec3 outward_normal = (record.intersection_point - center) / radius;
             record.set_face_normal(ray_obj, outward_normal);
+            record.mat = mat;
 
             return true;
         }
@@ -53,6 +54,7 @@ class sphere : public hittable
     private:
         point3 center;
         double radius;
+        shared_ptr<material> mat;
 };
 
 #endif
