@@ -1,7 +1,11 @@
-*.png
+# Output images
 *.ppm
+
+# Build directory
 build/
+
+# IDE files
 .vscode/
+
+# KDE directory metadata
 .directory
-/build
-build/main
