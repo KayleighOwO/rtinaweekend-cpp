@@ -1,3 +1,7 @@
-
 *.png
 *.ppm
+build/
+.vscode/
+.directory
+/build
+build/main
