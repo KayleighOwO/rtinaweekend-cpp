@@ -5,6 +5,13 @@
 #include "rtweekend.h"
 #include "material.h"
 
+#include <thread>
+#include <vector>
+#include <random>
+#include <mutex>
+#include <atomic>
+
+
 class camera
 {
     public:
@@ -25,20 +32,56 @@ class camera
         {
             initialise();
             
+            // Allocate buffer for pixel colours
+            std::vector<std::vector<colour>> pixel_colours(image_height, std::vector<colour>(image_width));
+
+            unsigned int num_threads = std::thread::hardware_concurrency();
+            if (num_threads == 0) num_threads = 1; // Fallback if hardware_concurrency fails
+
+            std::vector<std::thread> threads;
+            std::atomic<int> scanlines_remaining(image_height);
+
+            for (unsigned int t = 0; t < num_threads; t++)
+            {
+                threads.emplace_back([this, &world, &pixel_colours, &scanlines_remaining, num_threads, t]()
+                {
+                    // Random number generator for each thread
+                    std::mt19937 rng(std::random_device{}());
+                    std::uniform_real_distribution<double> dist(0.0, 1.0);
+
+                    for (int pixel_y = t; pixel_y < image_height; pixel_y += num_threads)
+                    {
+                        for (int pixel_x = 0; pixel_x < image_width; pixel_x++)
+                        {
+                            colour pixel_colour(0, 0, 0);
+                            for (int sample = 0; sample < samples_per_pixel; sample++)
+                            {
+                                ray ray_obj = get_ray_thread_safe(pixel_y, pixel_x, rng, dist);
+                                pixel_colour += ray_colour(ray_obj, max_depth, world, rng, dist);
+                            }
+
+                            pixel_colours[pixel_y][pixel_x] = pixel_colour;
+                        }
+
+                        int remaining = --scanlines_remaining;
+                        std::clog << "\rScanlines remaining: " << remaining << ' ' << std::flush;
+                    }
+                });
+            }
+
+            // Wait for all threads to complete
+            for (auto& thread : threads)
+            {
+                thread.join();
+            }
+            
             image_file << "P3\n" << image_width << ' ' << image_height << "\n255\n";
 
             for (int pixel_y = 0; pixel_y < image_height; pixel_y++)
             {
-                std::clog << "\rScanlines remaining: " << (image_height - pixel_y) << ' ' << std::flush;
                 for (int pixel_x = 0; pixel_x < image_width; pixel_x++)
                 {
-                    colour pixel_colour(0, 0, 0);
-                    for (int sample = 0; sample < samples_per_pixel; sample++)
-                    {
-                        ray ray_obj = get_ray(pixel_y, pixel_x);
-                        pixel_colour += ray_colour(ray_obj, max_depth, world);
-                    }
-                    write_colour(image_file, pixel_samples_scale * pixel_colour);
+                    write_colour(image_file, pixel_samples_scale * pixel_colours[pixel_y][pixel_x]);
                 }
             }
 
@@ -74,7 +117,6 @@ class camera
             auto theta = degrees_to_radians(vfov);
             auto h = std::tan(theta / 2);
             auto viewport_height = 2 * h * focus_dist;
-            //auto viewport_height = 2 * h * focal_length;
             auto viewport_width = viewport_height * (double(image_width) / image_height);
             
             // Calculate the u,v,w unit basis vectors for the camera coordinate frame.
@@ -90,10 +132,6 @@ class camera
             pixel_delta_x = viewport_vector_x / image_width;
             pixel_delta_y = viewport_vector_y / image_height;
 
-            // auto viewport_upper_left = camera_center
-            //                          - focal_length * w
-            //                          - viewport_vector_x / 2
-            //                          - viewport_vector_y / 2;
             auto viewport_upper_left = camera_center
                                      - focus_dist * w
                                      - viewport_vector_x / 2
@@ -125,10 +163,30 @@ class camera
             return ray(ray_origin, ray_direction, ray_time);
         }
 
+        // Thread-safe version of get_ray
+        ray get_ray_thread_safe(int pixel_y, int pixel_x, std::mt19937& rng, std::uniform_real_distribution<double>& dist) const
+        {
+            auto offset = sample_square_thread_safe(rng, dist);
+            auto pixel_sample = pixel00_location
+                              + ((pixel_y + offset.get_x()) * pixel_delta_y)
+                              + ((pixel_x + offset.get_y()) * pixel_delta_x);
+
+            auto ray_origin = (defocus_angle <= 0) ? camera_center : defocus_disk_sample_thread_safe(rng, dist);
+            auto ray_direction = pixel_sample - ray_origin;
+            auto ray_time = dist(rng);
+
+            return ray(ray_origin, ray_direction, ray_time);
+        }
+
         vec3 sample_square() const
         {
             // Returns the vector to a random point in the [-.5,-.5]-[+.5,+.5] unit square
             return vec3(random_double() - 0.5, random_double() - 0.5, 0);
+        }
+
+        vec3 sample_square_thread_safe(std::mt19937& rng, std::uniform_real_distribution<double>& dist) const
+        {
+            return vec3(dist(rng) - 0.5, dist(rng) - 0.5, 0);
         }
 
         point3 defocus_disk_sample() const
@@ -136,6 +194,22 @@ class camera
             // Returns a random point in the camera defocus disk.
             auto point = random_in_unit_disk();
             return camera_center + (point[0] * defocus_disk_x) + (point[1] * defocus_disk_y);
+        }
+
+        point3 defocus_disk_sample_thread_safe(std::mt19937& rng, std::uniform_real_distribution<double>& dist) const
+        {
+            auto point = random_in_unit_disk_thread_safe(rng, dist);
+            return camera_center + (point[0] * defocus_disk_x) + (point[1] * defocus_disk_y);
+        }
+
+        vec3 random_in_unit_disk_thread_safe(std::mt19937& rng, std::uniform_real_distribution<double>& dist) const
+        {
+            while (true)
+            {
+                auto point = vec3(dist(rng) * 2.0 - 1.0, dist(rng) * 2.0 - 1.0, 0);
+                if (point.get_length_squared() < 1)
+                    return point;
+            }
         }
         
         colour ray_colour(const ray& ray_obj, int depth, const hittable& world) const
@@ -155,6 +229,34 @@ class camera
                 if (record.mat -> scatter(ray_obj, record, attenuation, scattered))
                 {
                     return attenuation * ray_colour(scattered, depth - 1, world);
+                }
+
+                return colour(0, 0, 0);
+            }
+            
+            vec3 unit_direction = unit_vector(ray_obj.get_direction());
+            auto a = 0.5 * (unit_direction.get_y() + 1.0);
+            return (1.0 - a) * colour(1.0, 1.0, 1.0)
+                + a * colour(0.5, 0.7, 1.0);
+        }
+
+        // Thread-safe version of ray_colour
+        colour ray_colour(const ray& ray_obj, int depth, const hittable& world, std::mt19937& rng, std::uniform_real_distribution<double>& dist) const
+        {
+            if (depth <= 0)
+            {
+                return colour(0, 0, 0);
+            }
+            
+            hit_record record;
+            
+            if (world.hit(ray_obj, interval(0.001, infinity), record))
+            {
+                ray scattered;
+                colour attenuation;
+                if (record.mat -> scatter_thread_safe(ray_obj, record, attenuation, scattered, rng, dist))
+                {
+                    return attenuation * ray_colour(scattered, depth - 1, world, rng, dist);
                 }
 
                 return colour(0, 0, 0);
