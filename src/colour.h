@@ -1,5 +1,5 @@
-#ifndef COLOR_H
-#define COLOR_H
+#ifndef COLOUR_H
+#define COLOUR_H
 
 #include "vec3.h"
 #include "rtweekend.h"

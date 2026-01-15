@@ -148,6 +148,18 @@ inline vec3 unit_vector(const vec3& vector)
     return vector / vector.get_length();
 }
 
+inline vec3 random_in_unit_disk()
+{
+    while (true)
+    {
+        auto point = vec3(random_double(-1, 1), random_double(-1, 1), 0);
+        if (point.get_length_squared() < 1)
+        {
+            return point;
+        }
+    }
+}
+
 inline vec3 random_unit_vector()
 {
     while (true)
@@ -177,6 +189,15 @@ inline vec3 random_on_hemisphere(const vec3& normal)
 inline vec3 reflect(const vec3& vector, const vec3& normal)
 {
     return vector - 2 * dot(vector, normal) * normal;
+}
+
+inline vec3 refract(const vec3& uv, const vec3& normal, double etai_over_etat)
+{
+    auto cos_theta = std::fmin(dot(-uv, normal), 1.0);
+    vec3 ray_out_perp = etai_over_etat * (uv + cos_theta * normal);
+    vec3 ray_out_parallel = -std::sqrt(std::fabs(1.0 - ray_out_perp.get_length_squared())) * normal;
+
+    return ray_out_perp + ray_out_parallel;
 }
 
 #endif

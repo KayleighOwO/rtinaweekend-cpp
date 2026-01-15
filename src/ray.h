@@ -7,12 +7,22 @@ class ray {
     public:
         ray() {}
 
+        // ray(const point3& ray_origin, const vec3& ray_direction)
+        //     : origin_point(ray_origin), direction_vector(ray_direction) {}
+        ray(const point3& ray_origin, const vec3& ray_direction, double time)
+            : origin_point(ray_origin), direction_vector(ray_direction), tm(time) {}
+
         ray(const point3& ray_origin, const vec3& ray_direction)
-            : origin_point(ray_origin), direction_vector(ray_direction) {}
+            : ray(ray_origin, ray_direction, 0) {}
 
         const point3& get_origin() const  { return origin_point; }
         const vec3& get_direction() const { return direction_vector; }
 
+        double time() const
+        {
+            return tm;
+        }
+        
         // Returns the point along the ray at parameter t
         point3 get_point_at(double t) const
         {
@@ -22,6 +32,7 @@ class ray {
     private:
         point3 origin_point;        // Starting point of the ray
         vec3 direction_vector;      // Direction the ray is pointing
+        double tm;
 };
 
 #endif
