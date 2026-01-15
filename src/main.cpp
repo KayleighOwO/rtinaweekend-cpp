@@ -6,9 +6,16 @@
 #include "sphere.h"
 #include "camera.h"
 #include "material.h"
+#include "cmdline_parser.h"
 
-int main()
+int main(int argc, char* argv[])
 {
+    camera_config config;
+    if (!parse_arguments(argc, argv, config))
+    {
+        return 0;
+    }
+    
     hittable_list world;
     
     // auto material_ground = make_shared<lambertian>(colour(0.8, 0.8, 0.0));
@@ -22,22 +29,6 @@ int main()
     // world.add(make_shared<sphere>(point3(-1.0, 0.0, -1.0), 0.5, material_left));
     // world.add(make_shared<sphere>(point3(-1.0, 0.0, -1.0), 0.4, material_bubble));
     // world.add(make_shared<sphere>(point3(1.0, 0.0, -1.0), 0.5, material_right));
-    
-
-    // camera cam;
-
-    // cam.aspect_ratio      = 16.0 / 9.0;
-    // cam.image_width       = 512;
-    // cam.samples_per_pixel = 100;
-    // cam.max_depth         = 50;
-
-    // cam.vfov      = 20;
-    // cam.look_from = point3(-2, 2, 1);
-    // cam.look_at   = point3(0, 0, -1);
-    // cam.view_up   = vec3(0, 1, 0);
-
-    // cam.defocus_angle = 10.0;
-    // cam.focus_dist    = 3.4;
 
     auto ground_material = make_shared<lambertian>(colour(0.5, 0.5, 0.5));
     world.add(make_shared<sphere>(point3(0, -1000, 0), 1000, ground_material));
@@ -92,18 +83,20 @@ int main()
 
     camera cam;
 
-    cam.aspect_ratio = 16.0 / 9.0;
-    cam.image_width = 512;
-    cam.samples_per_pixel = 100;
-    cam.max_depth = 100;
+    cam.aspect_ratio = config.aspect_ratio;
+    cam.image_width = config.image_width;
+    cam.samples_per_pixel = config.samples_per_pixel;
+    cam.max_depth = config.max_depth;
 
-    cam.vfov = 20;
-    cam.look_from = point3(13, 2, 3);
-    cam.look_at = point3(0, 0, 0);
-    cam.view_up = vec3(0, 1, 0);
+    cam.vfov = config.vfov;
+    cam.look_from = config.look_from;
+    cam.look_at = config.look_at;
+    cam.view_up = config.view_up;
 
-    cam.defocus_angle = 0.6;
-    cam.focus_dist = 10.0;
+    cam.defocus_angle = config.defocus_angle;
+    cam.focus_dist = config.focus_dist;
 
     cam.render(world);
+
+    return 0;
 }
